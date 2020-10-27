@@ -348,13 +348,13 @@ PUT /索引名/类型名(高版本都不写了，都是_doc)/文档id
 
 #### 修改索引
 
-1.修改我们可以还是用原来的PUT的命令，根据id来修改
+老办法：修改我们可以还是用原来的PUT的命令，根据id来修改
 
 ![image-20201025210925408](upload/image-20201025210925408.png)
 
 但是如果没有填写的字段 会重置为空了 ，相当于java接口传对象修改，如果只是传id的某些字段，那其他没传的值都为空了。
 
-2.还有一种update方法 这种不设置某些值 数据不会丢失
+新办法：update方法 这种不设置某些值 数据不会丢失
 
 ```shell
 POST /test3/_doc/1/_update
@@ -383,21 +383,518 @@ POST /test3/_doc/1
 
 关于删除索引或者文档的操作
 
+```shell
+删除文档
+DELETE /test3/_doc/1
+删除索引
+DELETE /test3
+```
+
+
+
 ![image-20201025211152885](upload/image-20201025211152885.png)
 
 通过DELETE命令实现删除，根据你的请求来判断是删除索引还是删除文档记录
 
 使用RESTFUL的风格是我们ES推荐大家使用的！
 
+### 3.2 关于文档的基本操作
+
+1、添加数据
+
+```shell
+PUT /ntj/user/1
+{
+  "name": "小牛大人",
+  "age": 23,
+  "desc": "编程大魔王，要加油！", 
+  "tags": ["技术宅","善良","聪明"]
+}
+
+PUT /ntj/user/2
+{
+  "name": "张三",
+  "age": 23,
+  "desc": "法外狂徒张三", 
+  "tags": ["凶狠","高","黑"]
+}
+
+PUT /ntj/user/3
+{
+  "name": "李四",
+  "age": 12,
+  "desc": "卖烧饼的屠夫", 
+  "tags": ["旅游","唱歌","喝酒"]
+}
+
+```
+
+![image-20201026093838097](upload/image-20201026093838097.png)
+
+2、查看 GET
+
+![image-20201026094227067](upload/image-20201026094227067.png)
+
+3、更新数据 PUT
+
+某个字段不写 则会为空
+
+![image-20201026094121025](upload/image-20201026094121025.png)
+
+4、Post _update 推荐这种更新方式
+
+```shell
+POST ntj/user/1/_update
+{
+  "doc": {
+    "name": "小牛"
+  }
+}
+```
+
+![image-20201026094537663](upload/image-20201026094537663.png)
+
 #### 查询
 
 最简单的搜索是GET
 
-搜索功能search
+```shell
+GET ntj/user/_search?q=name:牛
+```
 
-![image-20201025211544070](upload/image-20201025211544070.png)
+![image-20201026095011026](upload/image-20201026095011026.png)
 
 
 
+![image-20201026160240139](upload/image-20201026160240139.png)
+
+搜索过滤 展示指定的列
+
+```shell
+GET ntj/user/_search
+{
+  "query": {
+    "match": {
+      "name": "小牛"
+    }
+  },
+  "_source": ["name","desc"]
+}
+```
+
+![image-20201026160741063](upload/image-20201026160741063.png)
+
+#### 排序
+
+```shell
+GET ntj/user/_search
+{
+  "query": {
+    "match": {
+      "name": "小牛"
+    }
+  },
+  "sort": [
+    {
+      "age": {
+        "order": "desc"
+      }
+    }
+  ]
+}
+```
+
+![image-20201026161114865](upload/image-20201026161114865.png)
+
+#### 分页查询
+
+```shell
+GET ntj/user/_search
+{
+  "query": {
+    "match": {
+      "name": "小牛"
+    }
+  },
+  "sort": [
+    {
+      "age": {
+        "order": "desc"
+      }
+    }
+  ],
+  "from": 0,
+  "size": 1
+}
+```
+
+![image-20201026161340365](upload/image-20201026161340365.png)
+
+#### 布尔值查询
+
+> mast (类似MySQL中的and)
+
+```shell
+GET ntj/user/_search
+{
+  "query": {
+    "bool": {
+      "must": [
+        {
+          "match": {
+            "name": "牛"
+          }
+        },
+        {
+          "match": {
+            "age": 23
+          }
+        }
+      ]
+    }
+  }
+}
+```
+
+![image-20201026163732634](upload/image-20201026163732634.png)
 
 
+
+> should（or或者的 跟数据库一样）
+
+```shell
+GET ntj/user/_search
+{
+  "query": {
+    "bool": {
+      "should": [
+        {
+          "match": {
+            "name": "牛"
+          }
+        },
+        {
+          "match": {
+            "age": 23
+          }
+        }
+      ]
+    }
+  }
+}
+```
+
+![image-20201026164101314](upload/image-20201026164101314.png)
+
+
+
+> must_not (not 不在)
+
+![image-20201026164234109](upload/image-20201026164234109.png)
+
+
+
+>  条件区间
+
+```shell
+GET ntj/user/_search
+{
+  "query": {
+    "bool": {
+      "must": [
+        {
+          "match": {
+            "name": "牛"
+          }
+        }
+      ],
+      "filter": {
+        "range": {
+          "age": {
+            "gt": 20
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+![image-20201026164717132](upload/image-20201026164717132.png)
+
+- gt大于
+- gte大于等于
+- lte小于
+- lte小于等于
+
+#### 匹配多条件查询
+
+```shell
+GET ntj/user/_search
+{
+  "query": {
+    "match": {
+      "tags": "hei 唱歌"
+    }
+  }
+}
+```
+
+![image-20201026165325674](upload/image-20201026165325674.png)
+
+#### 精确查询
+
+term查询是直接通过倒排索引指定的词条进程精确查找的！
+
+**关于分词**：
+
+- term，直接查询精确的
+- match，会使用分词器解析
+
+**两个类型text  keyword**
+
+text可以被分割
+
+![image-20201026170336023](upload/image-20201026170336023.png)
+
+keyword 不可以分割
+
+![image-20201026170230771](upload/image-20201026170230771.png)
+
+> 精确查询多个值
+
+![image-20201026171649890](upload/image-20201026171649890.png)
+
+#### 高亮查询
+
+
+
+```shell
+GET ntj/user/_search
+{
+  "query": {
+    "match": {
+      "name": "小牛"
+    }
+  },
+  "highlight": {
+    "fields": {
+      "name": {}
+    }
+  }
+}
+```
+
+![image-20201026172251478](upload/image-20201026172251478.png)
+
+
+
+> 自定义高亮的格式
+
+![image-20201026172715371](upload/image-20201026172715371.png)
+
+
+
+### 4、集成SpringBoot
+
+### 4.1 引入依赖包
+
+创建一个springboot的项目 同时勾选上`springboot-web`的包以及`Nosql的elasticsearch`的包
+
+注意下spring-boot的parent包内的依赖的es的版本是不是你对应的版本
+
+不是的话就在pom文件下写个properties的版本
+
+```xml
+<!--这边配置下自己对应的版本-->
+<properties>
+    <java.version>1.8</java.version>
+    <elasticsearch.version>7.6.1</elasticsearch.version>
+</properties>
+
+```
+
+### 4.2 注入RestHighLevelClient 客户端
+
+```java
+@Configuration
+public class ElasticSearchClientConfig {
+    @Bean
+    public RestHighLevelClient restHighLevelClient(){
+        RestHighLevelClient client = new RestHighLevelClient(
+                RestClient.builder(new HttpHost("127.0.0.1",9200,"http"))
+        );
+        return client;
+    }
+}
+```
+
+### 4.3 索引的增、删、是否存在
+
+```java
+//测试索引的创建
+@Test
+void testCreateIndex() throws IOException {
+    //1.创建索引的请求
+    CreateIndexRequest request = new CreateIndexRequest("java_index");
+    //2客户端执行请求，请求后获得响应
+    CreateIndexResponse response = client.indices().create(request, RequestOptions.DEFAULT);
+    System.out.println(response);
+}
+
+//测试索引是否存在
+@Test
+void testExistIndex() throws IOException {
+    //1.创建索引的请求
+    GetIndexRequest request = new GetIndexRequest("java_index");
+    //2客户端执行请求，请求后获得响应
+    boolean exist =  client.indices().exists(request, RequestOptions.DEFAULT);
+    System.out.println("测试索引是否存在-----"+exist);
+}
+
+//删除索引
+@Test
+void testDeleteIndex() throws IOException {
+    DeleteIndexRequest request = new DeleteIndexRequest("java_index");
+    AcknowledgedResponse delete = client.indices().delete(request,RequestOptions.DEFAULT);
+    System.out.println("删除索引--------"+delete.isAcknowledged());
+}
+```
+
+### 4.4 文档的操作
+
+```java
+  //添加文档
+    @Test
+    void testDocument() throws IOException {
+        //创建对象
+        User user = new User("牛牛", 3);
+        //创建请求
+        IndexRequest request = new IndexRequest("java_index");
+        //规则 put/java_index/_doc/1
+        request.id("1");
+        request.timeout(TimeValue.timeValueSeconds(1));
+        request.timeout("1s");
+
+        //将我们的数据放入请求 json
+        IndexRequest source = request.source(JSON.toJSONString(user), XContentType.JSON);
+        //客户端发送请求,获取响应的结果
+        IndexResponse index = restHighLevelClient.index(source, RequestOptions.DEFAULT);
+        System.out.println(index.toString());
+        System.out.println(index.status());
+    }
+
+    @Test
+    void testExistDocument() throws IOException {
+        //测试文档的 没有index
+        GetRequest request= new GetRequest("java_index","1");
+        //没有indices()了
+        boolean exist = restHighLevelClient.exists(request, RequestOptions.DEFAULT);
+        System.out.println("测试文档是否存在-----"+exist);
+    }
+
+    //测试获取文档
+    @Test
+    void testGetDocument() throws IOException {
+        GetRequest request = new GetRequest("java_index", "1");
+        GetResponse response = restHighLevelClient.get(request, RequestOptions.DEFAULT);
+        System.out.println("测试获取文档-----" + response.getSourceAsString());
+        System.out.println("测试获取文档-----" + response);
+    }
+    /**
+     * 结果：
+     * 测试获取文档-----{"age":3,"name":"牛牛"}
+     * 测试获取文档-----{"_index":"java_index","_type":"_doc","_id":"1","_version":1,"_seq_no":0,"_primary_term":1,"found":true,"_source":{"age":3,"name":"牛牛"}}
+     */
+    @Test
+    void testUpdateDocument() throws IOException {
+        User user = new User("李逍遥", 55);
+        //修改是id为1的
+        UpdateRequest request = new UpdateRequest("java_index", "1");
+        request.timeout("1s");
+        request.doc(JSON.toJSONString(user), XContentType.JSON);
+
+        UpdateResponse response = restHighLevelClient.update(request, RequestOptions.DEFAULT);
+        System.out.println("测试修改文档-----" + response);
+        System.out.println("测试修改文档-----" + response.status());
+        /**
+         * 结果
+         * 测试修改文档-----UpdateResponse[index=java_index,type=_doc,id=1,version=2,seqNo=1,primaryTerm=1,result=updated,shards=ShardInfo{total=2, successful=1, failures=[]}]
+         * 测试修改文档-----OK
+         */
+    }
+    //测试删除文档
+    @Test
+    void testDeleteDocument() throws IOException {
+        DeleteRequest request= new DeleteRequest("java_index","1");
+        request.timeout("1s");
+        DeleteResponse response = restHighLevelClient.delete(request, RequestOptions.DEFAULT);
+        System.out.println("测试删除文档------"+response.status());
+        /*
+        测试删除文档------OK
+         */
+    }
+    //测试批量添加文档
+    @Test
+    void testBulkAddDocument() throws IOException {
+        ArrayList<User> userlist=new ArrayList<User>();
+        userlist.add(new User("xn1",5));
+        userlist.add(new User("xn2",6));
+        userlist.add(new User("xn3",40));
+        userlist.add(new User("xn4",25));
+        userlist.add(new User("xn5",15));
+        userlist.add(new User("xn6",35));
+
+        //批量操作的Request
+        BulkRequest request = new BulkRequest();
+        request.timeout("1s");
+
+        //批量处理请求
+        for (int i = 0; i < userlist.size(); i++) {
+            request.add(
+                    new IndexRequest("java_index")
+                            .id(""+(i+1))
+                            .source(JSON.toJSONString(userlist.get(i)),XContentType.JSON)
+            );
+        }
+        BulkResponse response = restHighLevelClient.bulk(request, RequestOptions.DEFAULT);
+        //response.hasFailures()是否是失败的
+        System.out.println("测试批量添加文档-----"+response.hasFailures());
+//        结果:false为成功 true为失败
+//        测试批量添加文档-----false
+    }
+    //测试查询文档
+    @Test
+    void testSearchDocument() throws IOException {
+        SearchRequest request = new SearchRequest("java_index");
+        //构建搜索条件
+        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
+        //设置了高亮
+        sourceBuilder.highlighter();
+        //term name为cyx1的
+        TermQueryBuilder termQueryBuilder = QueryBuilders.termQuery("name", "xn1");
+        sourceBuilder.query(termQueryBuilder);
+        sourceBuilder.timeout(new TimeValue(60, TimeUnit.SECONDS));
+
+        request.source(sourceBuilder);
+        SearchResponse response = restHighLevelClient.search(request, RequestOptions.DEFAULT);
+
+        System.out.println("测试查询文档-----"+JSON.toJSONString(response.getHits()));
+        System.out.println("=====================");
+        for (SearchHit documentFields : response.getHits().getHits()) {
+            System.out.println("测试查询文档--遍历参数--"+documentFields.getSourceAsMap());
+        }
+        /**
+         * 测试查询文档-----{"fragment":true,"hits":[{"fields":{},"fragment":false,"highlightFields":{},"id":"1","matchedQueries":[],"primaryTerm":0,"rawSortValues":[],"score":1.540445,"seqNo":-2,"sortValues":[],"sourceAsMap":{"name":"xn1","age":5},"sourceAsString":"{\"age\":5,\"name\":\"xn1\"}","sourceRef":{"fragment":true},"type":"_doc","version":-1}],"maxScore":1.540445,"totalHits":{"relation":"EQUAL_TO","value":1}}
+         * =====================
+         * 测试查询文档--遍历参数--{name=xn1, age=5}
+         * 2020-10-26 20:06:38.218  INFO 16292 --- [extShutdownHook] o.s.s.concurrent.ThreadPoolTaskExecutor  : Shutting down ExecutorService 'applicationTaskExecutor'
+         */
+
+    }
+
+```
+
+### 实战京东搜索
+
+#### 爬取数据
