@@ -84,6 +84,8 @@ https://blog.csdn.net/mgdj25/article/details/105740191
 
 3.启动 npm run start
 
+![image-20201027205508480](upload/image-20201027205508480.png)
+
 4.访问http://localhost:9100
 
 ![image-20201025204511273](upload/image-20201025204511273.png)
@@ -897,4 +899,178 @@ void testDeleteIndex() throws IOException {
 
 ### 实战京东搜索
 
-#### 爬取数据
+导入vue.min.js与axios.min.js
+
+**爬取数据**
+
+```java
+@Component
+public class HtmlParseUtil {
+    public List<Content> parseJD(String keywords) throws IOException {
+        //获取资源 https://search.jd.com/Search?keyword=java
+        String url = "https://search.jd.com/Search?keyword="+keywords;
+        //解析网页(Jsoup返回的document就是浏览器Document对象)
+        Document document = Jsoup.parse(new URL(url), 30000);
+        Element element = document.getElementById("J_goodsList");
+        Elements elements = element.getElementsByTag("li");
+        ArrayList<Content> goodslist = new ArrayList<>();
+        //获取元素中的内容，这里的el 就是每个li标签
+        for (Element el : elements) {
+            //不显示图片是因为 网站图片是懒加载 等页面渲染了 才会将图片显示出来
+            String img = el.getElementsByTag("img").eq(0).attr("data-lazy-img");
+            String price = el.getElementsByClass("p-price").eq(0).text();
+            String title = el.getElementsByClass("p-name").eq(0).text();
+            Content content = new Content();
+            content.setImg(img);
+            content.setTitle(title);
+            content.setPrice(price);
+            goodslist.add(content);
+        }
+        return goodslist;
+    }
+}
+
+```
+
+**写入ElasticSearch**
+
+```java
+@Service
+public class ContentService {
+    @Autowired
+    private RestHighLevelClient restHighLevelClient;
+
+    //1、解析数据放到es索引中
+    public Boolean parseContent(String keywords) throws Exception{
+        List<Content> contents = new HtmlParseUtil().parseJD(keywords);
+        //把查询道数据导入es中
+        BulkRequest bulkRequest = new BulkRequest();
+        bulkRequest.timeout("2m");
+        for (int i = 0; i < contents.size(); i++) {
+            bulkRequest.add(
+                    new IndexRequest("jd_goods")
+                    .source(JSON.toJSONString(contents.get(i)),XContentType.JSON)
+            );
+        }
+        BulkResponse bulk = restHighLevelClient.bulk(bulkRequest, RequestOptions.DEFAULT);
+        return !bulk.hasFailures();
+    }
+    //2、获取这些数据实现搜索功能
+    public List<Map<String,Object>> searchPage(String keyword,
+                                               int pageNo,
+                                               int pageSize) throws IOException {
+        if (pageNo <= 1){
+            pageNo = 1;
+        }
+        //条件查询
+        SearchRequest searchRequest = new SearchRequest("jd_goods");
+        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
+
+        //分页
+        sourceBuilder.from(pageNo);
+        sourceBuilder.size(pageSize);
+
+        //精准匹配
+        TermQueryBuilder termQueryBuilder = QueryBuilders.termQuery("title", keyword);
+        sourceBuilder.query(termQueryBuilder);
+        sourceBuilder.timeout(new TimeValue(60, TimeUnit.SECONDS));
+
+        //执行搜索
+        searchRequest.source(sourceBuilder);
+        SearchResponse searchResponse = restHighLevelClient.search(searchRequest, RequestOptions.DEFAULT);
+
+        //解析结果
+
+        ArrayList<Map<String,Object>> list = new ArrayList<>();
+        for (SearchHit documentFields : searchResponse.getHits().getHits()) {
+            list.add(documentFields.getSourceAsMap());
+        }
+        return list;
+    }
+
+    //3、高亮搜索
+    public List<Map<String,Object>> searchHighlighterPage(String keyword,
+                                               int pageNo,
+                                               int pageSize) throws IOException {
+        if (pageNo <= 1) {
+            pageNo = 1;
+        }
+            //条件查询
+            SearchRequest searchRequest = new SearchRequest("jd_goods");
+            SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
+
+            //分页
+            sourceBuilder.from(pageNo);
+            sourceBuilder.size(pageSize);
+
+            //精准匹配
+            TermQueryBuilder termQueryBuilder = QueryBuilders.termQuery("title", keyword);
+            sourceBuilder.query(termQueryBuilder);
+            sourceBuilder.timeout(new TimeValue(60, TimeUnit.SECONDS));
+
+
+            //高亮
+            HighlightBuilder highlightBuilder = new HighlightBuilder();
+            highlightBuilder.field("title");
+            highlightBuilder.requireFieldMatch(false);//一条结果有多个关键字 选择一个高亮
+            highlightBuilder.preTags("<span style='color:red'>");
+            highlightBuilder.postTags("</span>");
+            sourceBuilder.highlighter(highlightBuilder);
+            //执行搜索
+            searchRequest.source(sourceBuilder);
+            SearchResponse searchResponse = restHighLevelClient.search(searchRequest, RequestOptions.DEFAULT);
+
+
+            //解析结果
+            ArrayList<Map<String, Object>> list = new ArrayList<>();
+
+            for (SearchHit documentFields : searchResponse.getHits().getHits()) {
+                Map<String, HighlightField> highlightFields = documentFields.getHighlightFields();
+                HighlightField title = highlightFields.get("title");
+                Map<String, Object> sourceAsMap = documentFields.getSourceAsMap();//原来的结果
+                //解析高亮地字段，将原来的字段换为高亮字段即可。
+                if (title != null) {
+                    Text[] fragments = title.fragments();
+                    String n_title = "";
+                    for (Text text : fragments) {
+                        n_title += text;
+                    }
+                    sourceAsMap.put("title", n_title);//高亮字段替换
+                }
+                list.add(sourceAsMap);
+            }
+            return list;
+        }
+
+}
+```
+
+**Controller层**
+
+```java
+@RestController
+public class ContentController {
+    @Autowired
+    private ContentService contentService;
+    //爬取数据
+    @GetMapping("/parse/{keyword}")
+    public Boolean parse(@PathVariable("keyword") String keyword) throws Exception {
+        return contentService.parseContent(keyword);
+
+    }
+    
+    //查询数据
+  @GetMapping("/search/{keyword}/{pageNo}/{pageSize}")
+    public List<Map<String,Object>> search(@PathVariable("keyword") String keyword,
+                                           @PathVariable("pageNo") int pageNo,
+                                           @PathVariable("pageSize") int pageSize) throws IOException {
+
+       return contentService.searchHighlighterPage(keyword,pageNo,pageSize);
+    }
+
+}
+```
+
+**结果**
+
+![image-20201027202403790](upload/image-20201027202403790.png)

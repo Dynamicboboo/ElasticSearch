@@ -23,13 +23,14 @@ import java.util.Map;
 public class ContentController {
     @Autowired
     private ContentService contentService;
-
+    //爬取数据
     @GetMapping("/parse/{keyword}")
     public Boolean parse(@PathVariable("keyword") String keyword) throws Exception {
         return contentService.parseContent(keyword);
 
     }
 
+    //查询数据
     @GetMapping("/search/{keyword}/{pageNo}/{pageSize}")
     public List<Map<String,Object>> search(@PathVariable("keyword") String keyword,
                                            @PathVariable("pageNo") int pageNo,

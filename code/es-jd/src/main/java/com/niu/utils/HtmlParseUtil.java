@@ -35,10 +35,6 @@ public class HtmlParseUtil {
             String img = el.getElementsByTag("img").eq(0).attr("data-lazy-img");
             String price = el.getElementsByClass("p-price").eq(0).text();
             String title = el.getElementsByClass("p-name").eq(0).text();
-//            System.out.println("==================================");
-//            System.out.println(img);
-//            System.out.println(price);
-//            System.out.println(title);
             Content content = new Content();
             content.setImg(img);
             content.setTitle(title);
@@ -47,5 +43,4 @@ public class HtmlParseUtil {
         }
         return goodslist;
     }
-
 }
