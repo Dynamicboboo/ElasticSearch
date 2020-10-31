@@ -12,7 +12,7 @@ kibana: https://mirrors.huaweicloud.com/kibana/?C=N&O=D
 
 ik分词器 https://github.com/medcl/elasticsearch-analysis-ik
 
-**jdk必须是1.8及以上的版本**
+**jdk必须是1.8及以上的版本**。
 
 ### 1.2 elk安装 参考
 
